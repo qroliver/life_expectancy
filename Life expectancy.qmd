@@ -1,0 +1,1738 @@
+---
+title: "Impact of various socioeconomic factors on life expectancy."
+author: "Oliver Q.R."
+format: html
+---
+
+# Impact of various socioeconomic factors on life expectancy.
+
+## Abstract.
+
+This project aims to conduct an initial exploratory analysis of the relationship between life expectancy at birth and various socioeconomic factors. After gathering data from multiple sources, some insights were obtained during the analysis. Overall, life expectancy have shown a steady global increase, with access to healthcare resources and more egalitarian socioeconomic conditions being key factors in this improvement.
+
+## Introduction.
+
+Life expectancy at birth is the estimation of how long a newborn child is expected to live if prevailing patterns of mortality at the time of its birth were to stay the same throughout its life. In general, it is used as an overall indicator of a population's health and well-being, and it is affected by various factors such as healthcare access, disease prevalence, socioeconomic status, etc.
+
+Understanding the dynamics that shape life expectancy both globally and regionally is essential to design and implement public health policies aimed to improve longevity and quality of life across different communities. To gain a better understanding of these dynamics and some of the factors involved, the aim of this project is to analise the impact of different socioeconomic, health-related and demographic factors on life expectancy across countries worldwide. For this purpose, I will gather data publicly available from different sources, such as World Bank, World Health Organisation, United Nations, etc.
+
+Specifically, the variables I will collect are:
+
+-   Life expectancy at birth.
+
+-   Healthy life expectancy at birth (HALE).
+
+-   Mortality rate (crude death rate per 1,000 people).
+
+-   Deaths by non-communicable diseases.
+
+-   Deaths by communicable diseases.
+
+-   Infant mortality rate (per 1,000).
+
+-   Neonatal mortality rate (per 1,000).
+
+-   Maternal mortality rate (per 100,000 live births).
+
+-   Prevalence of malnutrition.
+
+-   Prevalence of stunting for children aged 5 or younger.
+
+-   Prevalence of underweight for children aged 5 or younger.
+
+-   Obesity rate.
+
+-   Number of physicians per 1,000 people.
+
+-   Number of hospital bed per 1,000 people.
+
+-   Number of nurses and midwives per 1000 people.
+
+-   Births attended by skilled health staff (% of total).
+
+-   Full immunization coverage among one-year-olds.
+
+-   Immunisation for DPT (children aged 2 or younger).
+
+-   Immunisation for measles (children aged 2 or younger).
+
+-   HIV/AIDS prevalence (15+).
+
+-   Incidence of tuberculosis (per 100,000 people).
+
+-   Incidence of malaria (per 1,000 people).
+
+-   Mortality from CVD, cancer, diabetes or CRD between exact ages 30 and 70 (%).
+
+-   GDP per capita.
+
+-   Health expenditure (% GDP).
+
+-   Universal healthcare coverage.
+
+-   Inequality (Gini index).
+
+-   Poverty ratio.
+
+-   Unemployment rate.
+
+-   Literacy rate.
+
+-   Average years of schooling.
+
+-   Education index.
+
+-   Urban population (%).
+
+-   Water - People using safely managed drinking water services (% of population).
+
+-   Sanitation services - People using safely managed sanitation services (% of population).
+
+-   PM2.5 air pollution, mean annual exposure (micrograms per cubic meter).
+
+-   Prevalence of tobacco use (% adults).
+
+-   Total alcohol consumption per capita (adults).<br>
+
+In order to get this data, I will use different R packages designed to fetch the data from the sources mentioned above.<br>
+
+## Packages.
+
+```{r, warning=FALSE, output=FALSE}
+library(tidyverse)
+library(WDI)
+library(WHO)
+library(countrycode)
+library(rvest)
+library(reactable)
+library(reactablefmtr)
+library(htmltools)
+library(ggtext)
+```
+
+## Data.
+
+I will start by gathering data from the World Bank that also includes several indicators from WHO. To do this, I will use the package *WDI* that allows to access the data hosted by the World Bank.
+
+First, I will create a list containing the indicators I am interested in, with the specific code each indicator has on the World Bank database. Other than the variables mentioned above, I will also include in this list the percentage of population in the following age groups: 0-14, 15-64, and 65+, which will give an overview of the distribution of the population in terms of age.
+
+```{r}
+wb_indicators <- list(
+  # Life expectancy at birth.
+  life_exp = "SP.DYN.LE00.IN",
+  # Death rate, crude (per 1000 people)
+  crude_death_rate = "SP.DYN.CDRT.IN",
+  # Cause of death, by non-communicable diseases (% of total)
+  death_non_com_dis = "SH.DTH.NCOM.ZS",
+  # Cause of death, by communicable diseases and maternal, prenatal and nutrition conditions (% of total)
+  death_com_dis = "SH.DTH.COMM.ZS",
+  # Maternal mortality rate (modeled estimate, per 100,000 live births)
+  maternal_mort_rate = "SH.STA.MMRT",
+  # Mortality rate, infant (per 1,000 live births)
+  infant_mort_rate = "SP.DYN.IMRT.IN",
+  # Mortality rate, neonatal (per 1,000 live births)
+  neonatal_mort_rate = "SH.DYN.NMRT",
+  # Prevalence of undernourishment (% of population)
+  undernourishment_rate = "SN.ITK.DEFC.ZS",
+  # Prevalence of stunting, height for age (modeled estimate, % of children under 5)
+  stunding_ch_rate = "SH.STA.STNT.ME.ZS",
+  # Prevalence of underweight, weight for age (% of children under 5)
+  underweight_ch_rate = "SH.STA.MALN.ZS",
+  # Physicians per 1000 people
+  physicians_per_1000 = "SH.MED.PHYS.ZS",
+  # Nurses and midwives per 1000
+  nurses_midw_per_1000 = "SH.MED.NUMW.P3",
+  # Hospital beds per 1000
+  hospital_beds_per_1000 = "SH.MED.BEDS.ZS",
+  # Births attended by skilled health staff (% of total)
+  births_skilled_staff ="SH.STA.BRTC.ZS",
+  # Immunization, DPT (% of children ages 12-23 months)
+  immun_DPT_ch_rate = "SH.IMM.IDPT",
+  # Immunization, measles (% of children ages 12-23 months)
+  immun_measles_ch_rate = "SH.IMM.MEAS",
+  # Prevalence of HIV, total (% of population ages 15-49)
+  hiv_prev = "SH.DYN.AIDS.ZS",
+  # Incidence of tuberculosis (per 100,000 people)
+  tuberc_inc = "SH.TBS.INCD",
+  # Incidence of malaria (per 1,000 population at risk)
+  malaria_inc = "SH.MLR.INCD.P3",
+  # Mortality from CVD, cancer, diabetes or CRD between exact ages 30 and 70 (%)
+  mort_cvd_cancer_diabetes_crd = "SH.DYN.NCOM.ZS",
+  # GDP per capita (current US$)
+  gdp_capita = "NY.GDP.PCAP.CD",
+  # Health expenditure (% GDP).
+  health_exp = "SH.XPD.CHEX.GD.ZS",
+  # Universal healthcare coverage index.
+  UHC_coverage_index = "SH.UHC.SRVS.CV.XD",
+  # Gini index.
+  gini_index = "SI.POV.GINI",
+  # Poverty headcount ratio at national poverty lines (% population).
+  poverty_ratio = "SI.POV.NAHC",
+  # Unemployment rate (% total labour force).
+  unempl_rate = "SL.UEM.TOTL.ZS",
+  # Literacy rate (15+, %).
+  literacy_rate = "SE.ADT.LITR.ZS",
+  # Urban population (% of total population)
+  urban_pop_perc = "SP.URB.TOTL.IN.ZS",
+  # Water - People using safely managed drinking water services (% of population)
+  safe_water_perc = "SH.H2O.SMDW.ZS",
+  # Sanitation services - People using safely managed sanitation services (% of population)
+  sanitation_perc = "SH.STA.SMSS.ZS",
+  # PM2.5 air pollution, mean annual exposure (micrograms per cubic meter)
+  air_pollution = "EN.ATM.PM25.MC.M3",
+  # People using at least basic drinking water services (% of population)
+  pop_clean_water_perc = "SH.H2O.BASW.ZS",
+  # People using at least basic sanitation services (% of population)
+  pop_basic_sanitation_perc = "SH.STA.BASS.ZS",
+  # Prevalence of current tobacco use (% of adults)
+  tobacco_prev = "SH.PRV.SMOK",
+  # Total alcohol consumption per capita (liters of pure alcohol, projected estimates, 15+ years of age)
+  alcohol_consump = "SH.ALC.PCAP.LI",
+  # Population ages 0-14 (% of total population)
+  pop_under_14_perc = "SP.POP.0014.TO.ZS",
+  # Population ages 15-64 (% of total population)
+  pop_15_64_perc = "SP.POP.1564.TO.ZS",
+  # Population ages 65 and above (% of total population)
+  pop_65_plus_perc = "SP.POP.65UP.TO.ZS"
+)
+```
+
+Next, I will create a function to gather the data for all the indicators above.
+
+```{r}
+fetch_wb_data <- function(indicator_id, name){
+  WDI(indicator = indicator_id, extra = TRUE) %>% 
+    rename(!!name := !!indicator_id)
+}
+```
+
+```{r}
+# fetching the data from World Bank
+wb_data_list <- map(wb_indicators, ~fetch_wb_data(.x, names(wb_indicators)[wb_indicators == .x]))
+
+# creating the tibble with all the data
+wb_data_raw <- reduce(wb_data_list, full_join, by = colnames(wb_data_list[[1]])[colnames(wb_data_list[[1]]) != "life_exp"])
+
+# having a look at the first rows of the World Bank data
+head(wb_data_raw)
+```
+
+Next, I will gather the following data from the World Health Organisation:
+
+-   Healthy life expectancy at birth (HALE).
+
+-   Obesity rate.
+
+-   Full immunisation coverage among one-year-olds.
+
+To do this, I will use the package WHO.
+
+```{r, warning=FALSE}
+# fetching the codes for the variables above
+who_codes <- get_codes()
+
+# showing the first codes to check everything went ok
+head(who_codes)
+```
+
+```{r}
+# getting Healthy life expectancy at birth (HALE) WHO code
+who_codes[grepl("[Hh]ealthy life expectancy", who_codes$display),]
+```
+
+```{r}
+# getting Healthy life expectancy at birth (HALE) data
+health_life_expect_raw <- get_data("WHOSIS_000002")
+
+# checking data
+head(health_life_expect_raw)
+```
+
+```{r}
+# getting Obesity rate WHO code
+who_codes[grepl("[Oo]besity", who_codes$display),]
+```
+
+For the obesity rate, I will use the crude estimate among adults (code NCD_BMI_30C).
+
+```{r}
+# getting data for obesity rate among adults (crude)
+obesity_rate_raw <- get_data("NCD_BMI_30C")
+
+# checking data
+head(obesity_rate_raw)
+```
+
+```{r}
+# getting the code for Full immunisation coverage among one-year-olds
+who_codes[grepl("[Ff]ull immunization", who_codes$display),]
+```
+
+```{r}
+# fetching the data
+vfull_raw <- get_data("vfull")
+
+# checking the data
+head(vfull_raw)
+```
+
+After this, I will merge these 3 datasets from the WHO.
+
+```{r}
+# preparing the data for merging
+health_life_expect <- health_life_expect_raw %>%
+  filter(!is.na(country),
+         sex == "Both sexes") %>%
+  select(country, year, value) %>%
+  rename(hale = value)
+
+obesity_rate <- obesity_rate_raw %>%
+  filter(!is.na(country),
+         sex == "Both sexes",
+         value != "No data") %>%
+  select(country, year, value) %>%
+  mutate(value = as.numeric(str_extract(value, "^[^ ]+"))) %>%
+  rename(obes_rate = value)
+
+vfull <- vfull_raw %>%
+  select(country, year, value, sex) %>%
+  filter(value != "No data") %>%
+  mutate(value = as.numeric(str_extract(value, "^[^ ]+"))) %>%
+  group_by(country, year) %>%
+  summarise(vfull = mean(value, na.rm = TRUE))
+
+# merging data
+who_data <- reduce(list(health_life_expect, obesity_rate, vfull),
+                   full_join,
+                   by = c("country", "year"))
+
+# checking data
+head(who_data)
+```
+
+Next, I will gather the Human Development Index data, from the UN Human Development Reports.
+
+```{r}
+# getting UN Human Development Report data
+hdi_raw <- read_csv("https://hdr.undp.org/sites/default/files/2023-24_HDR/HDR23-24_Composite_indices_complete_time_series.csv")
+
+# having a look at the first rows
+head(hdi_raw)
+```
+
+The next step is to merge all 3 datasets from World Bank, WHO and HDR to create a single dataset.
+
+```{r}
+# preparing wb_data for merging by doing extra cleaning
+wb_data <- wb_data_raw %>%
+  mutate(region = case_when(country == "Czechia" ~ "Europe & Central Asia",
+                            country == "Viet Nam" ~ "East Asia & Pacific",
+                            .default = region),
+         longitude = as.numeric(longitude),
+         latitude = as.numeric(latitude)) %>%
+  filter(!region %in% c("Aggregates", NA)) %>%
+  select(-status, -lending, -lastupdated)
+
+# preparing WHO dataset for merging by adding the country iso3c code
+who_data$iso3c <- countrycode(who_data$country, 
+                              origin = "country.name", 
+                              destination = "iso3c")
+
+# preparing HDI data
+hdi <- hdi_raw %>%
+  pivot_longer(cols = !c("iso3", "country", "hdicode", "region"),
+               names_to = "variable",
+               values_to = "value") %>%
+  separate(col = variable,
+           into = c("variable", "year"),
+           sep = "_(?=\\d{4}$)") %>%
+  mutate(year = as.integer(year)) %>%
+  rename(iso3c = iso3) %>%
+  pivot_wider(names_from = variable,
+              values_from = value) %>%
+  select(iso3c, country, hdicode, year, hdi, eys, mys) %>%
+  mutate(ed_index = round(((eys / 18 + mys / 15)/2), 2))
+
+# merging datasets
+data <- reduce(list(wb_data,
+                    who_data %>%
+                      select(-country),
+                    hdi %>%
+                      select(-country)),
+               left_join, by = c("iso3c", "year"))    # somehow this step makes up obesity rates for Sudan (can't figure out why)
+
+# extra cleaning of the merged data
+data <- data %>%
+  filter(!is.na(country), !is.na(iso3c), !is.na(region),
+         !(country == "Sudan" & !is.na(obes_rate))) %>%
+  distinct()
+
+# checking the merged data
+head(data)
+```
+
+Finally, I will fetch the UN standard codes for statistical use to define regions and sub-regions and merge with the rest of the data.
+
+```{r}
+# fetching codes
+UN_codes_table <- read_html("https://unstats.un.org/unsd/methodology/m49/overview/") %>%
+  html_table()
+
+# selecting the table in English
+UN_codes <- UN_codes_table[[1]]
+
+# cleaning column names
+colnames(UN_codes) <- str_replace_all(UN_codes[1, ], "-| ", "_")
+
+# cleaning the data
+UN_codes <- UN_codes %>%
+  slice(-1) %>%
+  select(country = Country_or_Area, iso3c = ISO_alpha3_Code, region = Region_Name,
+         subregion = Sub_region_Name)
+
+# merging with the data
+data <- left_join(x = data %>%
+                    select(-region),
+                  y = UN_codes %>%
+                    select(-country),
+                  by = "iso3c")
+
+# checking the data
+head(data)
+```
+
+Since I will focus my analysis in countries and regions, I will have a look at possible missing values in these columns (also for the column sub-region).
+
+```{r}
+# checking NA values for the columns iso3c, country, region and sub-region
+data %>%
+  select(iso3c, country, region, subregion) %>%
+  summarise_all(~sum(is.na(.)))
+```
+
+There are missing values for the columns region and sub-region. I will have a look a those rows to determine the countries that do not have a region and sub-region assigned.
+
+```{r}
+data %>%
+  select(iso3c, country, region, subregion) %>%
+  filter(is.na(region) | is.na(subregion)) %>%
+  distinct()
+```
+
+The countries that do not have a region and sub-region assigned are Kosovo and the Channel Islands (which is not a country but a British dependency) off the coast of France. Both territories are in Europe, so I will fill the missing information for the column region with this value. As for the sub-region, according to the UN geoschemes, Kosovo is located in Southern Europe and the Channel Islands could be assigned either to Northern Europe (like the UK) or to Western Europe (like France). Since it is a British dependency, I will use Northern Europe to fill this information for the Channel Islands.
+
+```{r}
+# filling missing values for the columns region and subregion
+data <- data %>%
+  mutate(region = case_when(country == "Kosovo" ~ "Europe",
+                            country == "Channel Islands" ~ "Europe",
+                            .default = region),
+         subregion = case_when(country == "Kosovo" ~ "Southern Europe",
+                               country == "Channel Islands" ~ "Northern Europe",
+                               .default = subregion))
+```
+
+## Exploratory data analysis.
+
+```{r}
+# structure of the dataset
+glimpse(data)
+```
+
+```{r}
+# having a look at 10 random rows
+data %>%
+  sample_n(10)
+```
+
+```{r}
+# counting number of unique countries, regions and subregions
+print(paste("Number of countries:", data %>%
+              select(country, iso3c) %>%
+              distinct() %>%
+              nrow()))
+
+print(paste("Number of regions:", data %>%
+              select(region) %>%
+              distinct() %>%
+              nrow()))
+
+print(paste("Number of sub-regions:", data %>%
+              select(subregion) %>%
+              distinct() %>%
+              nrow()))
+```
+
+There are 13,850 rows and 55 columns in the dataset, representing observations for 217 countries (or dependencies). Each row corresponds to multiple observations for a single country and year (expanding from the year 1960 to 2023, as shown in the summary below). These countries can be grouped in 5 regions and 17 sub-regions according to the UN geoschemes.
+
+Most of the variables are numeric. However, there are some that are nominal, such as *country*, *iso3c*, *iso2c*, *region*, *capital* and *income*.
+
+There are missing values for some variables, which corresponds to data that is not available. The amount of missing values per variable varies depending on the year. In principle, I will not do anything regarding the missing values (i.e., no imputation or removal of the data).
+
+```{r}
+# summary of the data including some descriptive statistics for the whole dataset
+summary(data)
+```
+
+I will start the analysis by exploring how the life expectancy has changed over the years.
+
+### The life expectancy has increased worldwide over time.
+
+The first question I wanted to address was whether life expectancy had changed significantly over time. First, I will have a look at how complete this data is for the different years (i.e., how many missing values there are for this variable and for each year).
+
+```{r}
+data %>%
+  select(year, life_exp) %>%
+  group_by(year) %>%
+  summarise(missing = sum(is.na(life_exp))) %>%
+  arrange(desc(year))
+```
+
+In general, it looks very complete with few missing values for most of the years (less than 10%), except for the year 2023, which still does not have data. Therefore, I will remove the rows corresponding to observations from this year.
+
+```{r}
+# removing rows with data for the year 2023
+data <- data %>%
+  filter(year < 2023)
+```
+
+#### Evolution of life expectancy over time (worldwide).
+
+```{r}
+# Worldwide average life expectancy over time
+ggplot(data %>%
+         group_by(year) %>%
+         summarise(avg_le = mean(life_exp, na.rm = TRUE)),
+       aes(x = year, y = avg_le)) +
+  geom_line(linewidth = 1, colour = "darkblue") +
+  geom_point(size = 2, colour = "darkblue") +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  labs(title = "Evolution of the average life expectancy worldwide",
+       x = "Year",
+       y = "Average life expectancy (years)",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+Overall, the average life expectancy worldwide has increased over the years following almost a linear trend, going from being below 55 years in 1960 to above 72 years in 2022. It is worth noticing the drop in the period 2019-2021, likely due to the COVID-19 pandemic.
+
+#### Evolution of the life expectancy by region.
+
+```{r}
+# average life expectancy over time by region
+ggplot(data %>%
+         group_by(region, year) %>%
+         summarise(avg_le = mean(life_exp, na.rm = TRUE)),
+       aes(x = year, y = avg_le, colour = region, shape = region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Evolution of the average life expectancy by region",
+       x = "Year",
+       y = "Average life expectancy (years)",
+       caption = "Data: World Bank",
+       colour = "Region") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+All regions have increased the average life time over the last 62 years, although at a different rate, with Asia experiencing the greatest increase. There are some other observations that can be made in the graph above:
+
+-   The gap between the regions with the longest and the lowest life expectancy has become smaller, but the difference is still significant between the region with the longest and the region with the lowest life expectancy (\~16 years in 2022, \~25 in 1960).
+
+-   Like in 1960, in 2022 Europe is the region with a highest life expectancy on average. The second region with the highest life expectancy in 2022 is Asia, surpassing the Americas.
+
+-   Africa is still the region with the lowest life expectancy in 2022, like in 1960.
+
+-   Asia is the region with a larger increase in average life expectancy, while this increase has been smaller in Oceania.
+
+-   A similar effect of the COVID-19 can be seen in most regions, with a small drop in life expectancy. Oceania is the region where this drop was the smallest and the only one where life expectancy after the COVID-19 pandemic is higher than before.
+
+```{r}
+reactable(data %>%
+            group_by(region, year) %>%
+            summarise(avg_le = round(mean(life_exp, na.rm = TRUE), 2)) %>%
+            filter(year %in% c(1960, 2022)) %>%
+            pivot_wider(names_from = year,
+                        values_from = avg_le,
+                        names_prefix = "y") %>%
+            mutate(change = y2022 - y1960),
+          fullWidth = TRUE,
+          columns = list(
+            "region" = colDef(name = "Region"),
+            "y1960" = colDef(name = "1960"),
+            "y2022" = colDef(name = "2022"),
+            "change" = colDef(name = "Change")
+          )) %>%
+  add_source("Data source: World Bank", align = "right", font_size = 12) %>%
+  add_title("Life expectancy (in years) by region", align = "center", font_size = 26)
+```
+
+#### Life expectancy by country.
+
+As shown below, the country with the greatest increase in life expectancy in the period 1960-2022 is China (45.31 years), followed by Maldives and Bhutan.
+
+```{r}
+# showing the 10 countries with the greatest increase in life expectancy (1960-2022).
+reactable(data %>%
+            select(iso3c, country, year, life_exp) %>%                    
+            pivot_wider(names_from = year, names_prefix = "y",
+                        values_from = "life_exp") %>%
+            mutate(change = y2022 - y1960) %>%
+            select(country, change, y1960, y2022) %>%
+            arrange(desc(change)) %>%
+            head(10),
+          fullWidth = TRUE,
+          columns = list(
+            "country" = colDef(name = "Country", headerVAlign = "center"),
+            "change" = colDef(name = "Change (years)", headerVAlign = "center",
+                              align = "center",
+                              cell = function(value){
+                                value <- round(value, 2)
+                              }),
+            "y1960" = colDef(name = "1960", headerVAlign = "center",
+                             cell = function(value){
+                                value <- round(value, 2)
+                              }),
+            "y2022" = colDef(name = "2022", headerVAlign = "center",
+                             cell = function(value){
+                                value <- round(value, 2)
+                              })
+          )) %>%
+  add_source("Data source: World Bank", align = "right", font_size = 12) %>%
+  add_title("Countries with the greatest increase in life expectancy (1960-2022)", align = "center", font_size = 26)
+```
+
+On the other end (below), Ukraine is the country with the smallest increase. In fact, there is a slight decrease (-0.897) that could be due to the Russian invasion in 2022. After Ukraine, Lesotho and Belarus are the countries where the increase in life expectancy was the lowest for the period 1960-2022.
+
+```{r}
+# showing the 10 countries with the lowest increase in life expectancy (1960-2022).
+reactable(data %>%
+            select(iso3c, country, year, life_exp) %>%                    
+            pivot_wider(names_from = year, names_prefix = "y",
+                        values_from = "life_exp") %>%
+            mutate(change = y2022 - y1960) %>%
+            select(country, change, y1960, y2022) %>%
+            arrange(change) %>%
+            head(10),
+          fullWidth = TRUE,
+          columns = list(
+            "country" = colDef(name = "Country", headerVAlign = "center"),
+            "change" = colDef(name = "Change (years)", headerVAlign = "center",
+                              align = "center",
+                              cell = function(value){
+                                value <- round(value, 2)
+                              }),
+            "y1960" = colDef(name = "1960", headerVAlign = "center",
+                             cell = function(value){
+                                value <- round(value, 2)
+                              }),
+            "y2022" = colDef(name = "2022", headerVAlign = "center",
+                             cell = function(value){
+                                value <- round(value, 2)
+                              })
+          )) %>%
+  add_source("Data source: World Bank", align = "right", font_size = 12) %>%
+  add_title("Countries with the smallest change in life expectancy (1960-2022)", align = "center", font_size = 26)
+```
+
+Among countries with the highest life expectancy, Liechtenstein was the one with the highest value in 2022 (84.32 years), followed by Japan and Switzerland.
+
+If autonomous regions / dependencies in the dataset are taken into account, Macao (autonomous region of China) is the region with the highest life expectancy in the world in 2022 (85.38 years).
+
+```{r}
+# countries with the highest life expectancy (2022)
+reactable(data %>%
+            filter(year == 2022) %>%
+            distinct(country, life_exp) %>%
+            arrange(desc(life_exp)) %>%
+            head(10),
+          fullWidth = TRUE,
+          columns = list(
+            "country" = colDef(name = "Country", headerVAlign = "center"),
+            "life_exp" = colDef(name = "Life exp. (years)", headerVAlign = "center",
+                                align = "center",
+                                cell = function(value){
+                                  value <- round(value, 2)
+                                })
+          )) %>%
+  add_source("Data: World Bank", align = "right", font_size = 12) %>%
+  add_title("Countries with the highest life expectancy (2022)", align = "center", font_size = 26)
+```
+
+In contrast, Chad is the country with the lowest life expectancy in 2022 (53 years), followed by Lesotho and Nigeria. It is worth noticing that the 10 countries with the lowest life expectancy in 2022 are in Africa.
+
+```{r}
+# countries with the lowest life expectancy (2022)
+reactable(data %>%
+            filter(year == 2022) %>%
+            distinct(country, life_exp) %>%
+            arrange(life_exp) %>%
+            head(10),
+          fullWidth = TRUE,
+          columns = list(
+            "country" = colDef(name = "Country", headerVAlign = "center"),
+            "life_exp" = colDef(name = "Life exp. (years)", headerVAlign = "center",
+                                align = "center",
+                                cell = function(value){
+                                  value <- round(value, 2)
+                                })
+          )) %>%
+  add_source("Data: World Bank", align = "right", font_size = 12) %>%
+  add_title("Countries with the lowest life expectancy (2022)", align = "center", font_size = 26)
+```
+
+### Factors affecting life expectancy.
+
+Several factors can explain the observations above, such as advances in medicine and technology (better treatments and medical-related techniques, vaccinations, etc.), improved public health conditions (sanitation services, access to water), better nutrition with reducing food poisoning risks, economic development, better healthcare access, international cooperation, etc.
+
+Among the variables selected for this project, which ones correlate with the life expectancy?
+
+```{r}
+# correlation with life expectancy
+le_corr_data <- data %>%
+  select(where(is.numeric)) %>%
+  filter(!is.na(life_exp)) %>%
+  select(-year, -hale)
+
+le_corr <- data.frame(map_dbl(le_corr_data,
+                          ~cor(le_corr_data$life_exp, .x, use = "complete.obs"))) %>%
+  rownames_to_column(var = "variable")
+
+names(le_corr)[2] <- "le_corr_coef"
+
+le_corr %>%
+  arrange(desc(le_corr_coef))
+```
+
+```{r}
+# creating vectors for socio-economic and health-related variables
+soe_vars <- c("gdp_capita", "health_exp", "UHC_coverage_index", "gini_index", "poverty_ratio", "unempl_rate", "literacy_rate", "urban_pop_perc", "safe_water_perc", "sanitation_perc","air_pollution", "pop_clean_water_perc", "pop_basic_sanitation_perc", "tobacco_prev", "alcohol_consump", "hdi", "eys", "mys", "ed_index", "undernourishment_rate", "stunting_ch_rate", "underweight_ch_rate")
+
+health_vars <- c("obes_rate", "vfull", "physicians_per_1000", "nurses_midw_per_1000", 
+                 "hospital_beds_per_1000", "births_skilled_staff", "immu_DPT_ch_rate",
+                 "immun_measles_ch_rate", "hiv_prev", "tuberc_inc", "malaria_inc",
+                 "mort_cvd_cancer_diabetes_crd")
+
+# creating a vector with labels
+custom_labels <- c(
+  "gdp_capita" = "GDP per capita",
+  "health_exp" = "Health exp. (% GDP)", 
+  "UHC_coverage_index" = "UHC coverage index", 
+  "gini_index" = "Gini index",
+  "poverty_ratio" = "Poverty ratio",
+  "unempl_rate" = "Unemployment rate", 
+  "literacy_rate" = "Literacy rate",
+  "urban_pop_perc" = "% urban pop.",
+  "safe_water_perc" = "% pop. using safely managed water services",
+  "sanitation_perc" = "% pop. using safely managed sanitation services",
+  "air_pollution" = "PM2.5 air pollution (µg / m3)",
+  "pop_clean_water_perc" = "% pop. with basic drinking water services",
+  "pop_basic_sanitation_perc" = "% pop. with basic sanitation services",
+  "tobacco_prev" = "Tobacco prevalence",
+  "alcohol_consump" = "Alcohol consumption per capita",
+  "hdi" = "Human Development Index",
+  "eys" = "Expected years of schooling",
+  "mys" = "Mean years of schooling", 
+  "ed_index" = "Education index",
+  "undernourishment_rate" = "Prevalence of undernourishment",
+  "stunting_ch_rate" = "Prevalence of stunting (children)", 
+  "underweight_ch_rate" = "Prevalence of underweight (children)", 
+  "obes_rate" = "Obesity rate",
+  "vfull" = "Full vaccinaccion for children aged 1 or younger", 
+  "physicians_per_1000" = "Physicians per 1,000 people",
+  "nurses_midw_per_1000" = "Nurses and midwives per 1,000 people", 
+  "hospital_beds_per_1000" = "Hospital beds per 1,000 people",
+  "births_skilled_staff" = "Births attended by skilled staff",
+  "immu_DPT_ch_rate" = "Immunisation for DPT (children)",
+  "immun_measles_ch_rate" = "Immunisation for measles (children)", 
+  "hiv_prev" = "HIV prevalence",
+  "tuberc_inc" = "Incidence of tuberculosis",
+  "malaria_inc" = "Incidence of malaria",
+  "mort_cvd_cancer_diabetes_crd" = "CVD, cancer, diabetes, CRD mortality"
+)
+```
+
+```{r}
+# plotting correlations
+ggplot(le_corr %>%
+         filter(variable != "life_exp",
+                variable %in% c(soe_vars, health_vars)),
+       aes(x = le_corr_coef, y = fct_reorder(variable, le_corr_coef, .desc = FALSE), fill = le_corr_coef)) +
+  geom_col(colour = "black") +
+  scale_fill_gradient2(low = "darkred", mid = "white", high = "darkblue") +
+  scale_y_discrete(expand = expansion(mult = c(0.025, 0.025)),
+                   labels = custom_labels) +
+  scale_x_continuous(limits = c(-1, 1)) +
+  labs(title = "Correlation with life expectancy.",
+       x = "Correlation coefficient",
+       y = element_blank(),
+       caption = "Data: World Bank, WHO, UNHDR.") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.position = "none",
+        axis.text.y = element_text(size = 7.5))
+```
+
+Most of the factors chosen have a moderate to strong correlation with the life expectancy (using the Pearson correlation coefficient). There are several strong correlations shown in the graph above. Among them, the factors that present a stronger positive correlation with the life expectancy are the Human Development Index, the universal healthcare coverage index and the access to clean drinking water and basic sanitation systems.
+
+As examples of these associations, the relationship between life expectancy and either the Human Development Index or the universal healthcare coverage index for the period 1960-2022 are shown below. It is a strong positive correlation, with a clear linear association. In general, in both graphs, sub-Saharan countries are the ones with the lowest Human Development Index and universal healthcare coverage index, while North American and European countries have the highest value for both factors.
+
+### Health factors.
+
+Health factors play an important role in shaping life expectancy trends in general. In this section I will focus on these factors and how their relationship with life expectancy in the last 60 years. Among the factors to explore, the dataset contains healthy life expectancy at birth, mortality rates, disease prevalence, immunisation, healthcare resources, etc.
+
+#### We live longer, we live healthier for longer.
+
+It seems that we life longer, which is great, but other than longer, are we healthier for longer time?
+
+```{r}
+data %>%
+  select(year, hale) %>%
+  group_by(year) %>%
+  summarise(missing = sum(is.na(hale))) %>%
+  arrange(desc(year))
+```
+
+For this variable (healthy life expectancy at birth) there are a lot of missing variables, and the most recent data is for the year 2019 (still with more than 10% missing values). In fact, there are data for the years 2000, 2010, 2015 and 2019.
+
+```{r}
+# HALE over time (worldwide)
+data %>%
+  filter(year %in% c(2000, 2010, 2015, 2019)) %>%
+  group_by(year) %>%
+  summarise(avg_hale = mean(hale, na.rm = TRUE)) %>%
+  ggplot(aes(x = year, y = avg_hale)) +
+  geom_line(linewidth = 1, colour = "darkblue") +
+  geom_point(size = 2, colour = "darkblue") +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  labs(title = "Evolution of the average healthy life expectancy at birth worldwide",
+       x = "Year",
+       y = "Average healthy life expectancy (years)",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+By looking at the available data (for years 2000, 2010, 2015 and 2019), it seems that, on average, not only we live longer but also we have a healthy life for longer time (above). Like with the life expectancy at birth, this increase also follows a linear trend.
+
+The same is true when looking at the data disaggregated by region (below), although small differences can be seen in the last years for some regions. Africa is the region with the greatest increase in healthy life expectancy at birth over the last 22 years, while Oceania has the mildest increase. Also, the increase of this factor in the Americas between 2015 and 2019 is very little, almost nothing.
+
+```{r}
+# average healthy life expectancy over time by region
+ggplot(data %>%
+         filter(year %in% c(2000, 2010, 2014, 2019)) %>%
+         group_by(region, year) %>%
+         summarise(avg_le = mean(life_exp, na.rm = TRUE)),
+       aes(x = year, y = avg_le, colour = region, shape = region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Evolution of the average life expectancy at birth by region",
+       x = "Year",
+       y = "Average life expectancy (years)",
+       caption = "Data: World Bank",
+       colour = "Region") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+As expected, there is a strong positive correlation between life expectancy and healthy life expectancy at birth (Pearson correlation coefficient = 0.97). Thus, we live longer and we have a healthier life for longer time.
+
+```{r}
+cor(data$life_exp, data$hale, use = "complete.obs")
+```
+
+### Mortality.
+
+Advances in medicine and technology not only impact life expectancy but also another related factor, mortality rate. From the observations above, it makes sense to think that the mortality rate has decreased worldwide, since we live longer (and healthier for longer) than ever. Thus, to test this hypothesis, I will start by exploring how different mortality indicators have changed over time and how they correlate with life expectancy at birth.
+
+#### Crude death rate.
+
+The crude death rate indicates the number of deaths, per 1,000 people (estimated at midyear), occurring during the year (World Bank). It is also considered a good indicator of the general health status of a geographic area or population.
+
+```{r}
+# Crude death rate worldwide for the period 1960-2022
+ggplot(data %>%
+         filter(year < 2023) %>%
+         group_by(year) %>%
+         summarise(avg_death_rate = mean(crude_death_rate, na.rm = TRUE)),
+       aes(x = year, y = avg_death_rate)) +
+  geom_line(linewidth = 1, colour = "darkblue") +
+  geom_point(size = 2, colour = "darkblue") +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  labs(title = "Evolution of the average death rate worldwide",
+       x = "Year",
+       y = "Crude death rate (per 1,000 people)",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+The crude death rate has decreased worldwide in the last 60 years (above). In fact, the crude death rate in 2019, before the COVID-19 pandemic, was nearly half of what it was in 1960.
+
+The effect of the COVID-19 can be seen in the graph, with a spike seen in 2020-2021 representing an increase in the crude death rate.
+
+The data broken down by region (below) show a big improvement in this metric in Africa and Asia. In fact, Asia, which had the second highest death rate in 1960, is the region with the lowest death rate in 2022. This death rate has remained more or less stable in the last decade, without big changes other than those caused by the COVID-19 pandemic.
+
+Africa, which had the highest in 1960, is now at the same level as the Americas and has a lower death rate than Europe. Also, until 2019 (before the pandemic), it was the only region with a steady decrease in the crude death rate.
+
+Another interesting observation is that there has not been a significant change in the crude death rate for Europe in the last 60 years, with a death rate that, before the COVID-19 pandemic, was nearly the same as in 1960.
+
+This "plateau" stage can also be seen for Oceania and the Americas in the last 30 years or so. In fact, for the Americas the crude death rate even was already increasing very mildly few years before the pandemic (after the first decade of this century; it is tempting to speculate that there could be a relationship with a worsening in the living conditions after the financial crisis in 2007-2008).
+
+Overall, a possible explanation for this effect in those regions could be the demographic composition of the population, with an increasing aged population compared to other regions.
+
+```{r}
+# Crude death rate worldwide for the period 1960-2022
+ggplot(data %>%
+         filter(year < 2023) %>%
+         group_by(region, year) %>%
+         summarise(avg_death_rate = mean(crude_death_rate, na.rm = TRUE)),
+       aes(x = year, y = avg_death_rate, colour = region, shape = region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Evolution of the average crude death rate by region",
+       x = "Year",
+       y = "Average crude death rate (per 1,000 people)",
+       caption = "Data: World Bank",
+       colour = "Region") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+As shown in the graph below, Europe is the continent with a higher proportional increase in population aged 65 and older when comparing 1960 and 2022, followed by the Americas. Europe is also the continent that has the lowest proportion of people aged 14 or younger in 2022, followed by the Americas and Asia.
+
+In contrast, Africa is the region with the lowest proportion of people aged 65+ in 2022, and with the highest proportion of people aged 14 or younger. Contrary to what is seen in other continents, the proportions for the 3 age groups below have not changed much in Africa in the last 60 years. Indeed, it is the only continent that has not seen an increase in the proportion of people aged 65+ in the last 60 years.
+
+```{r}
+# demographic composition for the different regions in 2022
+ggplot(data %>%
+         filter(year %in% c(1960, 2022)) %>%
+         select(region, year, pop_under_14_perc, pop_15_64_perc, pop_65_plus_perc) %>%
+         pivot_longer(cols = !c(region, year),
+                      names_to = "age_group",
+                      values_to = "value") %>%
+         group_by(region, year, age_group) %>%
+         summarise(mean_value = mean(value, na.rm = TRUE),
+                   std = sd(value, na.rm = TRUE)) %>%
+         mutate(year_age = paste(year, age_group, sep = "_")),
+       aes(x = factor(age_group, levels = c("pop_under_14_perc", "pop_15_64_perc", "pop_65_plus_perc")), 
+           y = mean_value,
+           fill = as.character(year))) +
+  geom_col(position = position_dodge(width = 0.9), colour = "black") +
+  geom_errorbar(aes(ymax = mean_value + std, ymin = mean_value),
+                width = 0.2,
+                position = position_dodge(width = 0.9)) +
+  scale_x_discrete(labels = c("14-", "15-64", "65+")) +
+  scale_y_continuous(expand = c(0, 0),
+                     limits = c(0, 70)) +
+  scale_fill_manual(values = c("#f46d43", "#313695")) +
+  labs(title = "Demographics by region",
+       subtitle = "Data for the years <span style=color:#f46d43>1960</span> & <span style=color:#313695>2022</span>",
+       x = "Population group",
+       y = "% population",
+       caption = "Data: World Bank.") +
+  facet_wrap(vars(region)) +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold"),
+        plot.subtitle = element_markdown(face = "bold"))
+```
+
+It might be that the demographic composition of the population has an effect in the crude mortality rate, but it is not the only factor playing a role. Others like healthcare access, access to safely managed drinking water and proper sanitation services, etc. are likely to have an effect as well and it would be interesting to have a closer look to the interplay between these factors and the crude death rate (not done in this project).
+
+```{r}
+# correlation between the crude death rate and life expectancy
+cor(data$life_exp, data$crude_death_rate, use = "complete.obs")
+```
+
+As expected, there is a strong negative correlation between the crude death rate and life expectancy, with a Pearson correlation coefficient of -0.80 (see graph below).
+
+```{r}
+# life expectancy vs. crude death rate
+ggplot(data,
+       aes(x = life_exp, y = crude_death_rate, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  scale_x_continuous(limits = c(0, 90)) +
+  scale_y_continuous(breaks = seq(0, 100, 20),
+                     limits = c(0, 110)) +
+  labs(title = "Life expectancy vs. crude death rate",
+       x = "Life expectancy (years)",
+       y = "Crude death rate (per 1,000 people)",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+#### Infant and neonatal mortality.
+
+Infant mortality is defined as the number of infants dying before reaching the age of 1 per 1,000 live births, whereas neonatal mortality counts the numbers of neonates dying before reaching 28 days of age. In general, mortality rates are used as indicators of health status of a country, and breaking them down by age groups helps at identifying vulnerable subsets of the population. Among these, infants and newborns are particularly critical since it often reflects issues regarding maternal health and access to healthcare, among other factors.
+
+```{r}
+# Infant and neonatal mortality rates worldwide for the period 1960-2022
+ggplot(data %>%
+         group_by(year) %>%
+         summarise(avg_infant_mort_rate = mean(infant_mort_rate, na.rm = TRUE),
+                   avg_neonatal_mort_rate = mean(neonatal_mort_rate, na.rm = TRUE)) %>%
+         pivot_longer(cols = !year,
+                      names_to = "factor",
+                      values_to = "rate"),
+       aes(x = year, y = rate, colour = factor, shape = factor)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_colour_manual(values = c("#2166ac", "#b2182b")) +
+  scale_shape_manual(values = c(15, 17)) +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  labs(title = "Evolution of the <span style=color:#2166ac>infant</span> and <span style=color:#b2182b>neonatal</span> mortality rates worldwide.",
+       subtitle = "Period: 1960-2022",
+       x = "Year",
+       y = "Average mortality rate (per 1,000 live births)",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_markdown(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.position = "none")
+```
+
+The world has seen a steady decrease in both infant and neonatal mortality rates in the last 60 years, being more pronounced in the case of infant mortality rate. Interestingly, for none of those factors a spike is seen in the years 2020-2021 (COVID-19 pandemic), which supports the general assumption that this disease had a higher impact in the mortality of older citizens.
+
+```{r}
+# Infant mortality rates by region for the period 1960-2022
+ggplot(data %>%
+         group_by(region, year) %>%
+         summarise(avg_infant_mort = mean(infant_mort_rate, na.rm = TRUE)),
+       aes(x = year, y = avg_infant_mort, colour = region, shape = region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Evolution of the average infant mortality rate by region",
+       x = "Year",
+       y = "Average infant mortality rate (per 1,000 live births)",
+       caption = "Data: World Bank",
+       colour = "Region") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+```{r}
+# Neonatal mortality rates by region for the period 1960-2022
+ggplot(data %>%
+         group_by(region, year) %>%
+         summarise(avg_neonatal_mort = mean(neonatal_mort_rate, na.rm = TRUE)),
+       aes(x = year, y = avg_neonatal_mort, colour = region, shape = region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Evolution of the average neonatal mortality rate by region",
+       x = "Year",
+       y = "Average infant mortality rate (per 1,000 live births)",
+       caption = "Data: World Bank",
+       colour = "Region") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+Both infant and neonatal mortality rates have decreased for all continents in the last 60 years, with the biggest drop in Africa and Asia. There are different factors that could explain this, like access to better healthcare services, increase in qualified medical personnel, etc.
+
+In spite of the improvement, Africa is still far behind compared to the rest of continents, especially when compared to Europe, although the gap in 2022 is smaller compared to 1960.
+
+```{r}
+# correlation of both infant and neonatal mortality rates with life expectancy
+print("Pearson correlation coefficients:")
+cat("Life exp.-Infant mortality rate:", cor(data$life_exp, data$infant_mort_rate, use = "complete.obs"), "\n")
+cat("Life exp.-Neonatal mortality rate:", cor(data$life_exp, data$neonatal_mort_rate, use = "complete.obs"))
+```
+
+```{r}
+# life expectancy vs. infant mortality rate
+ggplot(data,
+       aes(x = life_exp, y = infant_mort_rate, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  scale_x_continuous(limits = c(0, 90)) +
+  scale_y_continuous(breaks = seq(0, 300, 50),
+                     limits = c(0, 300)) +
+  labs(title = "Life expectancy vs. Infant mortality rate",
+       x = "Life expectancy (years)",
+       y = "Infant mortality rate (per 1,000 live births)",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+```{r}
+# life expectancy vs. neonatal mortality rate
+ggplot(data,
+       aes(x = life_exp, y = neonatal_mort_rate, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  scale_x_continuous(limits = c(0, 90)) +
+  scale_y_continuous(breaks = seq(0, 90, 10),
+                     limits = c(0, 80)) +
+  labs(title = "Life expectancy vs. Neonatal mortality rate",
+       x = "Life expectancy (years)",
+       y = "Neonatal mortality rate (per 1,000 live births)",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+Both factors have a strong negative correlation with life expectancy (\<-0.9), which indicates that the increase in life expectancy at birth correlates with decreasing infant and neonatal mortality rates.
+
+#### Disease-associated deaths.
+
+It is expected that the increasing life expectancy at birth correlates with lower disease-mortality rates. The dataset contains data on the percentage of deaths caused by both non-communicable and communicable disease (see definition below) among the total as well as mortality related to cardiovascular disease, cancer, diabetes and chronic respiratory disease (for people aged 30 to 70).
+
+Non-communicable diseases include cancer, diabetes mellitus, cardiovascular diseases, digestive diseases, skin diseases, musculoskeletal diseases, and congenital anomalies, whereas the data for communicable diseases and maternal, prenatal and nutrition conditions include mortality data related to infectious and parasitic diseases, respiratory infections, and nutritional deficiencies such as underweight and stunting.
+
+These data is often limited although it is really important in order to determine the overall health status of a population, especially in developing countries.
+
+The data of mortality from cardiovascular disease, cancer, diabetes and chronic respiratory disease reflects the percent of 30-year-old-people who would die before their 70th birthday from any of cardiovascular disease, cancer, diabetes, or chronic respiratory disease, given that person experiences current mortality rates at every age and s/he would not die from any other cause of death. Generally, these are death factor that have been more often associated to developed countries and the general life style and food habits in them.
+
+```{r}
+# % deaths associated to non communicable diseases over time worldwide
+ggplot(data %>%
+         filter(!is.na(death_non_com_dis)) %>%
+         group_by(year) %>%
+         summarise(avg_ncd = mean(death_non_com_dis, na.rm = TRUE)),
+       aes(x = year, y = avg_ncd)) +
+  geom_line(linewidth = 1, colour = "darkblue") +
+  geom_point(size = 2, colour = "darkblue") +
+  scale_x_continuous(breaks = seq(2000, 2020, 5),
+                     limits = c(1999, 2022)) +
+  labs(title = "Evolution of the % deaths associated with NCD worldwide",
+       subtitle = "NCD: non-communicable diseases",
+       x = "Year",
+       y = "% deaths",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+```{r}
+# % deaths associated to non communicable diseases over time by region
+ggplot(data %>%
+         filter(!is.na(death_non_com_dis)) %>%
+         group_by(region, year) %>%
+         summarise(avg_ncd = mean(death_non_com_dis, na.rm = TRUE)),
+       aes(x = year, y = avg_ncd, colour = region, shape = region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = seq(2000, 2020, 5),
+                     limits = c(1999, 2022)) +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Evolution of the % deaths associated with NCD worldwide",
+       subtitle = "NCD: non-communicable diseases",
+       x = "Year",
+       y = "% deaths",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+The share of deaths attributable to non-communicable diseases has increased worldwide over the last 20 years. While in generally well-developed regions like Europe this change has been minimal in this period, other continents, especially Africa, have seen a large increase in this metric in the period 2000-2019.
+
+Other conclusions that can be drawn from the graph above is that in developed regions like Europe, non-communicable diseases are the main cause of death, while the share in developing countries, like the Africans, this factor does not account for half of the deaths yet.
+
+As mentioned above, diseases that have traditionally been associated with developed countries fall into this group. Therefore, it is tempting to think that changes in the life style and diet that occurred in the past in developed regions like Europe are now happening in developing regions, and that this shift is one of the causes underlying the increased share of non-communicable disease-related deaths for continents like Africa.
+
+It is also worth mentioning that the demographic structure of the population might also play a role in this metric as diseases like cancer, for example, are associated with longer lifespans.
+
+```{r}
+# % deaths associated to communicable diseases over time worldwide
+ggplot(data %>%
+         filter(!is.na(death_com_dis)) %>%
+         group_by(year) %>%
+         summarise(avg_cd = mean(death_com_dis, na.rm = TRUE)),
+       aes(x = year, y = avg_cd)) +
+  geom_line(linewidth = 1, colour = "darkblue") +
+  geom_point(size = 2, colour = "darkblue") +
+  scale_x_continuous(breaks = seq(2000, 2020, 5),
+                     limits = c(1999, 2022)) +
+  labs(title = "Evolution of the % deaths associated with CD worldwide",
+       subtitle = "CD: communicable diseases",
+       x = "Year",
+       y = "% deaths",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+```{r}
+# % deaths associated to communicable diseases over time by region
+ggplot(data %>%
+         filter(!is.na(death_com_dis)) %>%
+         group_by(region, year) %>%
+         summarise(avg_cd = mean(death_com_dis, na.rm = TRUE)),
+       aes(x = year, y = avg_cd, colour = region, shape = region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = seq(2000, 2020, 5),
+                     limits = c(1999, 2022)) +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Evolution of the % deaths associated with CD worldwide",
+       subtitle = "NCD: communicable diseases",
+       x = "Year",
+       y = "% deaths",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+The observation for the share of deaths caused communicable diseases is the opposite. There is a steady decrease worldwide over the last 20 years. When looking at the regional level, this change is minimal for Europe, which is the region with the lowest share, and more pronounced for Africa, which has the highest share.
+
+The share of deaths related to communicable diseases in developed regions like Europe is very low, in contrast to what is seen in developing regions like Africa, where these deaths account for a significantly share of total deaths.
+
+These diseases are usually associated with developing countries. The observations above suggest that, although there is still a long way to go for regions like Africa, there is an overall improvement in factors traditionally related to socioeconomic development. These factors play a role in preventing the deaths related to communicable diseases and malnutrition. Thus, it seems that various programs implemented in these regions, like humanitarian and social projects are having a positive impact.
+
+There are several underlying factors that could influence the relationship between the two variables above and life expectancy, such as socioeconomic development, healthcare access and quality or environmental conditions, for example. Also, there could be a reverse causality effect that can also affect the relationship between the share of deaths caused by either NCD and CD and life expectancy. For those reasons, any assessment of a direct correlation between these variables should be made with extreme caution.
+
+#### Healthcare resources.
+
+An important factor in the general well-being of a population is the number and quality of the healthcare resources available. Among the different variables that can be used to monitor this, the dataset used in this project includes 3 metrics:
+
+-   Physicians per 1,000 people.
+
+-   Nurses and midwives per 1,000 people.
+
+-   Hospital beds per 1,000 people.
+
+The WHO, in its World Healthcare Report in 2006, estimates that a minimum of 2.5 medical staff (including physicians, nurses and midwives) per 1,000 people are required to provide adequate coverage with primary care interventions.
+
+```{r}
+# physicians per 1,000 over time by region
+ggplot(data %>%
+         filter(!is.na(physicians_per_1000)) %>%
+         group_by(region, year) %>%
+         summarise(avg_phys = mean(physicians_per_1000, na.rm = TRUE)),
+       aes(x = year, y = avg_phys, colour = region, shape = region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Physicians over time by region",
+       x = "Year",
+       y = "Physicians per 1,000 people",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+The rate of physicians (counted as both general practitioners and specialists) has increased significantly in Europe in the last 60 years. There is also an increase, although milder, for the Americas, Asia and Oceania, although they are far from the European numbers. In contrast, this number has almost not changed for Africa, having a very low rate of physicians per 1,000 people.
+
+```{r}
+# nurses & midwives per 1,000 over time by region
+ggplot(data %>%
+         filter(!is.na(nurses_midw_per_1000)) %>%
+         group_by(region, year) %>%
+         summarise(avg_nmd = mean(nurses_midw_per_1000, na.rm = TRUE)),
+       aes(x = year, y = avg_nmd, colour = region, shape = region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = seq(1990, 2020, 5)) +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Nurses & midwives over time by region",
+       x = "Year",
+       y = "Nurses & midwives per 1,000 people",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+In regards to the number of nurses and midwives per 1,000 people, again it is Europe the leading region. Together with the Americas, they are the only regions that have a higher rate for this metric in 2022 compared to 1960.
+
+Oceania is the region with the second highest number of nurses and midwives, in spite of a big drop in numbers between 2017-18.
+
+Asia has also less nurses and midwives in 2022 compared to 1960, and has been surpasses by the Americas in recent years.
+
+Like for the previous metric, Africa is the continent at the bottom, showing no improvement in the last 60 years. This makes Africa the only region that does not meet the minimum number of healthcare personnel estimated by the WHO to provide adequate coverage with primary care interventions.
+
+Another important factor to consider in regard to healthcare is the number of hospital beds per 1,000. This metric is a critical indicator of healthcare infrastructure, providing information about the capacity of a healthcare system to deliver adequate inpatient care. It also evaluates the readiness of a healthcare system to deliver non only routine care but also the capability to handle emergency situations and public health crisis.
+
+```{r}
+# hospital beds per 1,000 over time by region
+ggplot(data %>%
+         filter(!is.na(hospital_beds_per_1000)) %>%
+         group_by(region, year) %>%
+         summarise(avg_hb = mean(hospital_beds_per_1000, na.rm = TRUE)),
+       aes(x = year, y = avg_hb, colour = region, shape = region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = seq(1960, 2020, 5)) +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Evolution of hospital beds per 1,000 over time by region",
+       x = "Year",
+       y = "Hospital beds per 1,000 people",
+       caption = "Data: World Bank") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+The last data available in the dataset correspond to the years before the COVID-19 pandemic. In the graph above it is possible to see significant differences between the regions. Asia is the only region that had proportionally more hospital beds in 2018 than in 1960. In Asia, there was a significant increase in this number in 2018. A speculation is that this increase was caused by the implementation of new measures to strengthen the healthcare systems after various regional pandemics in the previous years, such as avian influenza outbreaks in China in 2014 and 2016, MERS in South Korea, etc.
+
+Europe, Oceania and the Americas have seen a significant decrease in the number of hospital beds in proportion to the population, having a lower number in 2019 than in 1960.
+
+Africa is again the region with the lowest numbers, even with a milder decrease in the number of beds per 1,000 (a factor to consider here is the demographic growth).
+
+A factor to consider in these metrics is the demographic growth of the different regions that can partially explain why these metrics did not increase in the last 60 years. However, it is not the only factor to consider as there are others that directly influence this metrics, like government healthcare expenditure.
+
+```{r}
+cat("Pearson correlation coefficient between life expectancy at birth and:\n",
+    "- Physicians per 1,000 people:", 
+    cor(data$life_exp, data$physicians_per_1000, use = "complete.obs"), "\n",
+    "- Nurses and midwives per 1,000 people:", 
+    cor(data$life_exp, data$nurses_midw_per_1000, use = "complete.obs"), "\n",
+    "- Hospital beds per 1,000 people:", 
+    cor(data$life_exp, data$hospital_beds_per_1000, use = "complete.obs"))
+```
+
+As expected, there is a positive correlation between the factors above and life expectancy, since these are factors with a direct impact on health and well-being of the population.
+
+### Socioeconomic factors.
+
+Socioeconomic factors play an important role in life expectancy, since it reflects broad societal factors that have a direct influence in health outcomes and, therefore, on life expectancy at birth. In this section, I will explore the relationship between life expectancy at birth and some of these factors, such as GDP per capita, healthcare coverage index, government healthcare expenditure, income inequiality, and others.
+
+#### GDP per capita.
+
+```{r}
+# life expectancy and GDP per capita
+ggplot(data,
+       aes(x = life_exp, y = gdp_capita, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. GDP per capita",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "GDP per capita (US$)",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+As seen in graph above, there is a positive correlation between GDP per capita and life expectancy at birth, and this follows an exponential curve.
+
+African countries generally have lower GDP per capita and lower life expectancy as well. On the other end, European countries are, in general, the ones with higher GDP per capita and life expectancy. This suggests that economic prosperity impact overall longevity, and it would be interesting how this relationship has evolved over time (not shown in this project).
+
+#### Health expenditure.
+
+Healthcare affordability and accessibility are critical factors impacting overall health outcomes and, as such, they are expected to have a direct impact on life expectancy at birth.
+
+```{r}
+# life expectancy and healthcare expenditure as % GDP
+ggplot(data,
+       aes(x = life_exp, y = health_exp, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. Healthcare expenditure",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "Healthcare expenditure (% GDP)",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+```{r}
+# life expectancy and healthcare expenditure as % GDP by region
+ggplot(data,
+       aes(x = life_exp, y = health_exp, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. Healthcare expenditure",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "Healthcare expenditure (% GDP)",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region")) +
+  facet_wrap(vars(region))
+```
+
+No clear relationship between life expectancy and healthcare expenditure can be seen in the graph above. Only when looking at the data broken down by region it is possible to visualise a positive correlation for some regions (Europe, the Americas, possibly a weak correlation also for Asia).
+
+Another factors not included in this project that would be worth looking at are the government healthcare expenditures as % GDP or expenditure per capita.
+
+#### Universal healthcare coverage.
+
+The UHC coverage index is an indicator that quantifies the degree to which a population can access the health services they need without facing financial hardship. This index covers 4 main categories: reproductive, maternal and newborn and child health; infectious diseases; non-communicable diseases; and service capacity and accessIncome inequality and poverty rate.
+
+```{r}
+# life expectancy and UHC coverage index
+ggplot(data %>%
+         filter(!is.na(UHC_coverage_index)),
+       aes(x = life_exp, y = UHC_coverage_index, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. UHC coverage index",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "UHC coverage index",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+There is very clear positive correlation between life expectancy and UHC coverage index. This index reflects a critical indicator of the general well-being of a population, and it is a factor where more efforts should be made as it has a great impact in the society.
+
+#### Unemployment rate.
+
+This variable measures the share of the labour force that is without job and available to work while seeking employment. Since it can affect different health outcomes and it might impose financial restrictions that could also impact healthcare accessibility in those countries without a solid tax-payed healthcare service, it is worth exploring what relationship this factor could have with life expectancy.
+
+```{r}
+# life expectancy and unemployment rate
+ggplot(data %>%
+         filter(!is.na(unempl_rate), !is.na(life_exp)),
+       aes(x = life_exp, y = unempl_rate, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. Unemployment rate",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "Unemployment rate (% total labour force)",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+Looking at the data worldwide, it seems that there is a direct relationship between these 2 variables, with a negative correlation. Thus, lower unemployment rates tend to correlate with longer life expectancy at birth. However, this relationship can be very complex as there are likely other variables involved (such as working conditions, wages, etc.). As such, caution should be taken when looking at this data at lower levels, like regional or sub-regional levels.
+
+#### Poverty and inequality.
+
+National poverty refers to the percentage of population in a country living below the national poverty threshold. Poverty leads usually to limited access to healthcare resources and is often associated with poor diet. Therefore, it is likely that poverty has a negative impact on life expectancy.
+
+```{r}
+# life expectancy and poverty ratio
+ggplot(data %>%
+         filter(!is.na(poverty_ratio), !is.na(life_exp)),
+       aes(x = life_exp, y = poverty_ratio, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. Poverty ratio",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "% population",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+Indeed, there is a negative correlation between the poverty ratio and life expectancy that follows a somewhat linear trend. As seen above, countries with a higher percentage of people living below the national poverty line tend to have shorter life expectancy. Over the last 60 years, most of those countries have been in Africa.
+
+Income inequality can also have an impact in life expectancy. In societies with high income inequality there can be a mental health and social stress related to economic pressure in the daily life of the citizens. Also, it relates to poverty, with the impact that this has in the access to healthcare services and dietary habits.
+
+One of the most common approaches to measure income inequality is the Gini index, which takes the value of 0 for totally egalitarian societies and 100 for full inequality.
+
+```{r}
+# life expectancy and income inequality
+ggplot(data %>%
+         filter(!is.na(gini_index), !is.na(life_exp)),
+       aes(x = life_exp, y = poverty_ratio, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. Income inequality",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "Gini index",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+As expected because of its relationship with poverty, countries with a higher income inequality tend to have shorter life expectancy.
+
+#### Literacy rate and education index.
+
+Literacy rate is the percentage of people (adults, in this case) able to both read and write with understanding at least short simple statements. This factor can determine health knowledge and awareness among population, thus having a direct impact on health outcomes and therefore life expectancy.
+
+```{r}
+# life expectancy and literacy rate
+ggplot(data %>%
+         filter(!is.na(literacy_rate), !is.na(life_exp)),
+       aes(x = life_exp, y = literacy_rate, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. Literacy rate",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "Literacy rate (% people aged 15+)",
+       caption = "Data source: World Bank",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+The graph above shows a clear positive relationship, with a linear trend, between this variable and life expectancy at birth. This could be related to the fact that, in general, literate people usually have better healthcare habits and adopt healthier lifestyles. Also, literacy promotes better economic opportunities that are reflected in better jobs and better financial security that could ensure proper access to healthcare in those countries in which this is not covered by the public sector in an affordable manner.
+
+```{r}
+# life expectancy and education index
+ggplot(data %>%
+         filter(!is.na(ed_index), !is.na(life_exp)),
+       aes(x = life_exp, y = ed_index, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. Education index",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "Education index",
+       caption = "Data source: World Bank, UNHDR.",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+Like above, the education index also correlates positively with life expectancy following a linear trend. Similar conclusions as for the literacy rate can be made in this case, emphasising that the education index reflects also the quality and extent of the education received. This has an impact not only the factors mentioned above but others like better adaptability to new health technologies and information, for example.
+
+In general, higher education levels in a society tend to lead to better socioeconomic conditions and healthier lifestyles, which have a direct impact on life expectancy.
+
+### Environmental and lifestyle factors.
+
+These factors have a profound impact on health and, therefore, on life expectancy. Thus, factors like air pollution, access to clean drinking water or safely managed sanitation systems, among others, have a great impact on the general well-being of a population due to their role in disease and mortality. Thus, it is expected that these factors also play a role in life expectancy.
+
+#### Air pollution.
+
+This variable measures the average annual exposure to this particles per cubic meter. Ambient PM2.5 air pollution is defined as the average exposure to particles smaller than 2.5 µm in diameter. This particles are able to penetrate deep into respiratory track and cause severe health damage.
+
+```{r}
+# life expectancy and PM2.5 air pollution
+ggplot(data %>%
+         filter(!is.na(air_pollution), !is.na(life_exp)),
+       aes(x = life_exp, y = air_pollution, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. Air pollution",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "PM2.5 particles (µg / m3)",
+       caption = "Data source: World Bank.",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+In the graph above it is possible to see a negative correlation between air pollution and life expectancy worldwide. Thus, lower exposures to these particles are associated with longer life expectancy. This is likely due to the link that exists prolonged exposure to PM2.5 and respiratory and cardiovascular diseases.
+
+#### Water and sanitation services.
+
+Access to safely managed water supply is critical to prevent waterborne diseases, like cholera or typhoid fever, among others. Contaminated water can carry potentially lethal diseases, with the impact that this have on health and, therefore, life expectancy. Thus, it is expected that this factor has a positive impact on life expectancy.
+
+```{r}
+# life expectancy and % people using safely managed water services
+ggplot(data %>%
+         filter(!is.na(safe_water_perc), !is.na(life_exp)),
+       aes(x = life_exp, y = safe_water_perc, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. Access to safely managed water services",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "% population",
+       caption = "Data source: World Bank.",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+Indeed, there is a clear positive correlation between this factor, as expected. Like in previous observations, countries having the lowest percentage of people accessing safely managed water tend to have lower life expectancy. African countries have been the ones suffering this effect more often in the last 60 years, in contrast to European countries.
+
+Adequate sanitation services prevent the transmission of fecal-oral diseases such as hepatitis A and polio that can have a great impact on health and, therefore, on life expectancy as well.
+
+```{r}
+# life expectancy and % people using safely managed sanitation services
+ggplot(data %>%
+         filter(!is.na(sanitation_perc), !is.na(life_exp)),
+       aes(x = life_exp, y = sanitation_perc, colour = region, shape = region)) +
+  geom_point() +
+  scale_colour_manual(values = c("#b2182b", "#f4a582", "#4393c3", "#2166ac", "#053061")) +
+  scale_shape_manual(values = c(15:18, 8)) +
+  labs(title = "Life expectancy vs. Access to safely managed sanitation services",
+       subtitle = "Period: 1960-2022",
+       x = "Life expectancy at birth (years)",
+       y = "% population",
+       caption = "Data source: World Bank.",
+       colour = "Region") +
+  theme_bw(base_size = 11,
+           base_family = "sans") +
+  theme(plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        legend.title = element_text(face = "bold")) +
+  guides(colour = guide_legend("Region"),
+         shape = guide_legend("Region"))
+```
+
+Like with the water, access to safely managed sanitation services correlates positively with longer life expectancy. Also, it seems that Africa has historically been behind in this regard over the last 60 years.
+
+## Conclusions.
+
+Life expectancy at birth is a key indicator of general population health and is influence by various socioeconomic and environmental factors. In this project, I have made a first approach to explore the interplay between distinct factors and life expectancy, with the following key findings:
+
+-   Life expectancy has shown a consistent increase since 1960, only interrupted by the COVID-19 pandemic in 2019.
+
+-   Asia is the continent that has seen the largest increase, and Oceania is the one with the minimal impact of the pandemic.
+
+-   Europe has the highest life expectancy, followed by Asia, whereas Africa has the lowest.
+
+-   The gap between regions has narrowed over time but still remains significant.
+
+-   Healthy life expectancy has also increased worldwide, showing a strong positive correlation with overall life expectancy.
+
+-   Mortality rates, including crude death, infant and neonatal mortality, have decreased steadily over time, contributing positively to life expectancy.
+
+-   Non-communicable diseases have become the leading cause of death globally, particularly in developed regions.
+
+-   Communicable diseases have decreased over time, suggesting improvements and success in public health interventions.
+
+-   Access to healthcare resources varies significantly across regions, with Europe leading in medical staff (and second in hospital beds) and Africa as the region with less resources.
+
+-   GDP per capita, healthcare coverage and education index show strong positive correlation with life expectancy.
+
+-   Income inequality and unemployment rates correlate negatively with life expectancy.
+
+These findings, although preliminary, highlights the need to implement public policies that lead to a more egalitarian society, and where affordable healthcare access should be a right granted for every citizen.
+
+Further analysis should be conducted to uncover additional regional and sub-regional trends that help to provide a clearer picture and identify areas where the greatest efforts should be made to ensure the best possible life conditions for all citizens.
